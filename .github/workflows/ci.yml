@@ -1,0 +1,30 @@
+name: Test suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Install tested Codex CLI
+        run: bun add --global @openai/codex@0.167.2
+      - name: Run complete suite
+        run: bun run test:all

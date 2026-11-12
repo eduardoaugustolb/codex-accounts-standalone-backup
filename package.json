@@ -1,0 +1,43 @@
+{
+  "name": "codex-accounts",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "codex-accounts": "./src/native-cli.ts"
+  },
+  "scripts": {
+    "start": "bun src/native-cli.ts",
+    "panel": "bun src/native-cli.ts panel",
+    "status": "bun src/native-cli.ts status",
+    "restart": "bun src/native-cli.ts restart",
+    "stop": "bun src/native-cli.ts stop",
+    "logout": "bun src/native-cli.ts logout",
+    "remove": "bun src/native-cli.ts remove",
+    "build": "bun build src/native-hook.ts src/native-backend.ts src/native-cli.ts --target=bun --outdir=marketplace/plugin/bin",
+    "setup": "bun run build && bun marketplace/plugin/bin/native-cli.js install",
+    "test": "bun test",
+    "check": "tsc --noEmit",
+    "test:auth-case": "bun tools/auth-hook-case.ts",
+    "test:native-case": "bun run build && bun tools/native-cli-case.ts",
+    "test:all": "bun tools/test-suite.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "@types/ws": "^8.18.2",
+    "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "ws": "^8.22.2"
+  },
+  "license": "MIT",
+  "description": "Local ChatGPT account manager for the official Codex CLI, with automatic account switching and conversation continuation.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eduardoaugustolb/codex-accounts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eduardoaugustolb/codex-accounts/issues"
+  },
+  "homepage": "https://github.com/eduardoaugustolb/codex-accounts#readme"
+}

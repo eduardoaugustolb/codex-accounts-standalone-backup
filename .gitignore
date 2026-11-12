@@ -1,0 +1,11 @@
+node_modules/
+.env
+*.log
+.codex-accounts/
+.test-tmp/
+/.agents/
+/.aws/
+/.codex/
+.env.*
+!.env.example
+coverage/

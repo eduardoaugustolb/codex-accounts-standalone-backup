@@ -1,0 +1,49 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"${PLUGIN_ROOT}/bin/native-hook.js\"",
+            "timeout": 5,
+            "statusMessage": "Conectando gerenciador de contas"
+          }
+        ]
+      }
+    ],
+    "PostModelRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"${PLUGIN_ROOT}/bin/native-hook.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"${PLUGIN_ROOT}/bin/native-hook.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"${PLUGIN_ROOT}/bin/native-hook.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
