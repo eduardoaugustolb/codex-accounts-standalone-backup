@@ -1,20 +1,20 @@
 ---
-name: Bug
-about: Relatar um comportamento incorreto com dados fictícios
+name: Bug report
+about: Report unexpected behavior using fake data
 labels: bug
 ---
 
-## Comportamento esperado e observado
+## Expected and actual behavior
 
-## Passos para reproduzir
+## Steps to reproduce
 
-## Ambiente
+## Environment
 
-- Sistema operacional:
-- Versões do plugin, Bun e Codex:
-- Autoswitch e continuação automática ativados:
+- Operating system:
+- Plugin, Bun, and Codex versions:
+- Automatic switching and automatic continuation settings:
 
-## Logs sem dados sensíveis
+## Logs without sensitive data
 
-Não inclua tokens, auth.json, conteúdo privado de conversas ou a URL do painel.
-Para vulnerabilidades, consulte SECURITY.md.
+Do not include tokens, auth.json, private conversation content, or the panel URL.
+For vulnerabilities, see SECURITY.md.

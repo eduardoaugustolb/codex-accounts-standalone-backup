@@ -7,7 +7,7 @@
             "type": "command",
             "command": "bun \"${PLUGIN_ROOT}/bin/native-hook.js\"",
             "timeout": 5,
-            "statusMessage": "Conectando gerenciador de contas"
+            "statusMessage": "Connecting account manager"
           }
         ]
       }

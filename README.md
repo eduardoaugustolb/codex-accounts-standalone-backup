@@ -2,136 +2,138 @@
 
 [![Test suite](https://github.com/eduardoaugustolb/codex-accounts/actions/workflows/ci.yml/badge.svg)](https://github.com/eduardoaugustolb/codex-accounts/actions/workflows/ci.yml) [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Plugin experimental para trocar contas ChatGPT no **Codex CLI oficial**, com confirmação local ou troca automática opcional quando a cota termina. Abra normalmente com `codex`: não há wrapper, alias ou launcher substituindo o binário.
+An experimental plugin for switching ChatGPT accounts in the **official Codex CLI**, with local confirmation or optional automatic switching when a quota is exhausted. Start Codex normally with `codex`; the plugin does not replace the binary with a wrapper, alias, or launcher.
 
-O plugin contém quatro hooks (`SessionStart`, `PostModelRequest`, `Stop` e `Interrupt`). Um backend local gerencia a confirmação e a autenticação pelo socket Unix do daemon oficial. Não há skill, MCP, instruções ou mensagens sobre o switcher enviadas ao modelo.
+The plugin provides four hooks (`SessionStart`, `PostModelRequest`, `Stop`, and `Interrupt`). A local backend manages confirmation and authentication through the official daemon's Unix socket. No skill, MCP server, or instructions about the account manager are sent to the model.
 
-## Instalação
+## Installation
 
-Requisitos testados: Linux, Bun 1.4.4 e Codex CLI 0.167.2. O fluxo usa uma RPC experimental de autenticação; outras versões precisam de nova verificação. No macOS, a abertura do navegador está implementada, mas não foi testada. Windows não é suportado neste protótipo.
+Tested requirements: Linux, Bun 1.4.4, and Codex CLI 0.167.2. Authentication uses an experimental RPC; other versions require verification. Browser launching is implemented for macOS but has not been tested. Windows is not supported by this prototype.
 
-O protótipo requer autenticação em arquivo. Em `~/.codex/config.toml`:
+The prototype requires file-based authentication. Set the following in `~/.codex/config.toml`:
 
 ```toml
 cli_auth_credentials_store = "file"
 ```
 
-Se você usava o keyring, faça login oficial novamente nesse modo antes de usar o plugin. O instalador não altera essa configuração nem extrai credenciais do keyring.
+If you previously used the keyring, sign in again through the official login flow in this mode before using the plugin. The installer does not change this setting or extract credentials from the keyring.
 
-Na pasta deste projeto:
+From the project directory:
 
 ```bash
 bun install
 bun run setup
 ```
 
-O setup compila o pacote em `marketplace/plugin/bin`, registra o marketplace local, instala o plugin pelo comando oficial e inicia o daemon oficial. Não modifica o binário nem configura aliases.
+Setup builds the package into `marketplace/plugin/bin`, registers the local marketplace, installs the plugin with the official command, and starts the official daemon. It does not modify the binary or configure aliases.
 
-Abra `codex`, entre em `/hooks`, revise e confie nos **quatro hooks do Codex Accounts**. Inicie uma nova conversa depois. A confiança é vinculada ao conteúdo do plugin; uma atualização pode exigir nova revisão. Não use `--dangerously-bypass-hook-trust`: essa opção desativa a reutilização do daemon no Codex 0.167.2.
+Open `codex`, enter `/hooks`, and review and trust **all four Codex Accounts hooks**. Then start a new conversation. Trust is tied to the plugin contents, so an update may require another review. Do not use `--dangerously-bypass-hook-trust`: this option disables daemon reuse in Codex 0.167.2.
 
-## Cadastrar contas
+## Adding accounts
 
-Salvar o login ChatGPT atual em arquivo:
+Save the current file-based ChatGPT login:
 
 ```bash
-bun run start capture pessoal
+bun run start capture personal
 ```
 
-Adicionar outra conta por login oficial, em diretório temporário isolado:
+Add another account through the official login flow in an isolated temporary directory:
 
 ```bash
-bun run start add trabalho
-# Alternativa com código de dispositivo:
-bun run start add secundaria --device
+bun run start add work
+# Alternatively, use a device code:
+bun run start add secondary --device
 bun run start list
 ```
 
-O cadastro não troca a conta da sessão atual. Selecione a conta desejada no navegador durante cada login. Os nomes aceitam letras, números, `_` e `-`, até 64 caracteres.
+Adding an account does not switch the current session. Select the intended account in the browser for each login. Account names accept letters, numbers, `_`, and `-`, up to 64 characters.
 
-Depois, entre em qualquer projeto e execute o binário oficial:
+Then open any project and run the official binary:
 
 ```bash
 codex
 ```
 
-## Remover uma conta
+## Account details and removal
 
-O painel mostra a foto quando ela está disponível no login. Como o App Server não fornece um endpoint de foto de perfil, use **Adicionar foto / Alterar foto** para salvar uma foto local (PNG, JPEG ou WebP, até 2 MB) quando necessário. A foto local é apagada junto com a conta.
+The panel displays a profile picture when one is available in the login data. Because App Server does not provide a profile picture endpoint, the panel also lets you upload a local PNG, JPEG, or WebP image up to 2 MB. The local image is deleted when you remove the account.
 
-Em cada conta, **Atualizar limites** consulta a RPC oficial `account/rateLimits/read` sem trocar a sessão compartilhada. O painel exibe as janelas de **5 horas** e **semanal**, com percentual restante, renovação em horário de Brasília e horário da última consulta. Janelas ausentes ou consultas que falharem aparecem como indisponíveis. Os valores ficam em memória até a próxima consulta ou reinício do backend. Não são limites gerais do ChatGPT: são os limites do Codex retornados pelo serviço para aquela conta.
+Each account's usage refresh action calls the official `account/rateLimits/read` RPC without switching the shared session. The panel displays the **five-hour** and **weekly** windows, remaining percentages, reset times in Brasilia time, and the last refresh time. Missing windows and failed requests appear as unavailable. Values remain in memory until the next refresh or backend restart. These are the account's Codex limits reported by the service, not general ChatGPT limits.
 
-Para remover uma conta salva individualmente:
+To remove an individual saved account:
 
 ```bash
-bun run remove secundaria
-# Equivalente:
-bun run start remove secundaria
+bun run remove secondary
+# Equivalent:
+bun run start remove secondary
 ```
 
-No painel, abra **Remover NOME** e clique em **Confirmar remoção**. Isso apaga as credenciais locais daquela conta; para voltar a usá-la, cadastre-a novamente. A conta em uso fica protegida: faça logout ou troque para outra antes de removê-la. As outras contas e o histórico das conversas são preservados.
+In the panel, expand the account's removal action and confirm it. This deletes that account's local credentials; add the account again to use it later. The active account is protected: sign out or switch to another account before removing it. Other accounts and conversation history are preserved.
 
-## Quando a cota termina
+## When a quota is exhausted
 
-1. O hook recebe a falha da requisição e avisa o backend sem consultar o modelo.
-2. O navegador abre um painel local perguntando se deseja trocar. Com troca automática desativada, a troca exige clicar na conta escolhida.
-3. O backend verifica se todos os turnos conectados ao daemon já pararam, preserva as credenciais atuais e aplica a conta escolhida por RPC.
-4. Volte ao mesmo terminal e envie `continue` quando desejar. Se ativar **Continuar automaticamente ao trocar de conta** nas preferências, o autoswitch envia `continue` na mesma conversa após trocar a conta.
+1. The hook receives the failed request and notifies the backend without querying the model.
+2. The browser opens a local panel offering an account switch. With automatic switching disabled, you must select an account to confirm the switch.
+3. The backend verifies that all turns connected to the daemon have stopped, preserves the current credentials, and applies the selected account through RPC.
+4. Return to the same terminal and send `continue` whenever you are ready. If automatic continuation (`autoContinue`) is enabled in preferences, autoswitch sends `continue` in the same conversation after switching accounts.
 
-A troca afeta todas as conversas conectadas ao mesmo App Server. O histórico permanece no `CODEX_HOME` original; as próximas requisições usam a identidade e as políticas da conta escolhida. A janela do CLI e a conversa não precisam ser reiniciadas no cenário testado.
+Switching affects every conversation connected to the same App Server. History stays in the original `CODEX_HOME`; subsequent requests use the selected account's identity and policies. The CLI window and conversation do not need to restart in the tested scenario.
 
-Para abrir o painel manualmente, sem envolver o modelo:
+To open the panel manually without involving the model:
 
 ```bash
 bun run start panel
 ```
 
-O comando pode ser executado em outro terminal e inicia o backend automaticamente, mesmo depois de `stop`. Não precisa cadastrar novamente as contas existentes. `bun run start status` mostra o endereço local ou informa que o backend está parado. Não foi registrado um slash command `/accounts`: a integração funciona pelos hooks, sem prompts de skill.
+This command can run in another terminal and starts the backend automatically, even after `stop`. Existing accounts do not need to be added again. `bun run start status` displays the local address or reports that the backend is stopped. There is no `/accounts` slash command: integration uses hooks without skill prompts.
 
 ```bash
-bun run panel     # Inicia o backend se necessário e abre o painel
+bun run panel     # Start the backend if needed and open the panel
 bun run status
-bun run restart   # Reinicia apenas o backend do plugin e mostra o novo endereço
+bun run restart   # Restart only the plugin backend and print its new address
 bun run stop
-bun run logout    # Sai da sessão do Codex compartilhada, mantendo as contas salvas
+bun run logout    # Sign out of the shared Codex session, keeping saved accounts
 ```
 
-Também estão disponíveis `bun run start start`, `bun run start restart` e `bun run start logout`. O painel tem um botão de confirmação de logout. Logout e troca exigem que todos os turnos do daemon estejam parados. Depois do logout, selecione uma conta salva no painel para entrar novamente. O logout usa a RPC oficial [`account/logout`](https://learn.chatgpt.com/docs/app-server#5-logout).
+The commands `bun run start start`, `bun run start restart`, and `bun run start logout` are also available. The panel includes a sign-out confirmation. Signing out and switching accounts require every daemon turn to be stopped. After signing out, select a saved account in the panel to sign in again. Sign-out uses the official [`account/logout`](https://learn.chatgpt.com/docs/app-server#5-logout) RPC.
 
-## Troca automática e painel ao vivo
+## Automatic switching and live updates
 
-Ative **Trocar de conta automaticamente** e clique em **Salvar preferência** no painel. A opção começa desativada e fica salva em `settings.json` no vault. Ao esgotar o limite de 5 horas ou semanal, ou receber uma falha de cota pelo hook, o backend aguarda todos os turnos pararem e consulta as outras contas em ordem alfabética. Troca para a primeira identidade diferente com saldo confirmado nos dois limites. Não abre o navegador no modo automático. Se nenhuma estiver disponível, mantém a sessão e informa o motivo no painel. A troca afeta todas as conversas. A preferência **Continuar automaticamente ao trocar de conta** começa desativada e também fica salva em `settings.json`. Quando ativada junto com o autoswitch, envia `continue` nas conversas carregadas cujo último turno falhou por limite, preservando o histórico. Verifica novamente o turno após o login e não envia se a conversa já mudou ou estiver ativa. Trocas manuais e trocas preventivas sem falha de cota não iniciam turnos. Se a confirmação do envio falhar, informa no painel e não repete o envio automaticamente.
+Enable automatic account switching (`autoSwitch`) in preferences and save. It is disabled by default and stored in the vault's `settings.json`. When the five-hour or weekly quota is exhausted, or a hook reports a quota failure, the backend waits for all turns to stop and checks other accounts in alphabetical order. It switches to the first different identity with confirmed remaining capacity in both windows. Automatic mode does not open the browser. If no eligible account is available, it keeps the session and displays the reason in the panel. Switching affects all connected conversations.
 
-`SessionStart` inicia o backend sem abrir o navegador. Os hooks precisam estar instalados, habilitados e confiados em `/hooks`. `PostModelRequest`, `Stop` e `Interrupt`, junto às notificações do App Server, sinalizam mudanças e verificam a cota. O navegador abre por `bun run panel` ou, no modo manual, quando um hook detecta cota esgotada.
+Automatic continuation (`autoContinue`) is also disabled by default and saved in `settings.json`. When enabled together with autoswitch, it sends `continue` to loaded conversations whose latest turn failed because of a quota, preserving history. The backend checks the turn again after login and skips conversations that have changed or are active. Manual switches and preventive switches without a quota failure do not start turns. If submission cannot be confirmed, the panel reports the issue and the backend does not automatically retry the submission.
 
-Com a aba visível e em foco, o painel recebe eventos por SSE e confere o estado local a cada 3 segundos. As cotas externas de todas as contas são consultadas ao recuperar foco, após eventos relevantes e no máximo a cada 30 segundos sem eventos. São dados atualizados conforme o serviço os disponibiliza, não uma garantia de atualização instantânea de fontes externas. Ao perder foco, o navegador fecha o SSE, cancela a consulta e para os timers; ao voltar, reconecta e pede dados novos. Uma consulta externa já em andamento pode terminar no servidor. Confirmações abertas e arquivos selecionados são preservados. O monitoramento pelos hooks e a renovação da autenticação continuam funcionando sem o painel.
+`SessionStart` starts the backend without opening the browser. Hooks must be installed, enabled, and trusted in `/hooks`. `PostModelRequest`, `Stop`, and `Interrupt`, together with App Server notifications, signal changes and trigger quota checks. The browser opens through `bun run panel` or, in manual mode, when a hook detects an exhausted quota.
 
-Para atualizar uma instalação existente, execute `bun run setup`, revise os quatro hooks em `/hooks` e inicie uma nova conversa. Depois use `bun run restart` e `bun run panel` para carregar o backend novo. Um reinício do backend gera um endereço novo; abas no endereço antigo devem ser reabertas por `bun run panel`.
+While the browser tab is visible and focused, the panel receives SSE events and checks local state every three seconds. External quotas for all accounts are queried when focus returns, after relevant events, and at most once every 30 seconds without events. Updates reflect the service's available data and are not a guarantee of instant changes from external sources. When the tab loses focus, the browser closes SSE, cancels its request, and stops timers. When focus returns, it reconnects and requests fresh data. An external query already running on the server may still finish. Open confirmations and selected upload files are preserved. Hook monitoring and authentication refresh continue without the panel.
 
-## Armazenamento e limites
+To update an existing installation, run `bun run setup`, review all four hooks in `/hooks`, and start a new conversation. Then use `bun run restart` and `bun run panel` to load the updated backend. Restarting the backend generates a new address; reopen old panel tabs with `bun run panel`.
 
-- Vault: `~/.local/share/codex-accounts/accounts/NOME/auth.json`, ou `CODEX_ACCOUNTS_HOME`. Credenciais ficam em arquivos `0600`, dentro de diretórios `0700`.
-- O backend mantém a conexão que atende renovações de tokens externos. Usa um App Server oficial separado para renovar o login da conta cadastrada e guarda o refresh token atualizado.
-- O painel escuta somente em `127.0.0.1`, com endereço aleatório por execução, proteção de origem e formulário com token CSRF. O IPC usa socket Unix em diretório privado de `/tmp`.
-- O backend permanece em segundo plano. `bun run stop` o encerra; `bun run panel` o inicia novamente. Parar o backend enquanto a autenticação externa está ativa interrompe o atendimento das renovações; depois de reiniciar o backend, selecione novamente a conta no painel para restabelecer esse atendimento. Reiniciar o daemon/CLI devolve a autenticação gerenciada ao Codex.
-- A conexão exige o daemon compartilhado do Codex. `--no-daemon`, `--strict-config`, certas opções `-c` e execuções remotas podem selecionar outro servidor e não são suportadas pelo protótipo. Se necessário, use `codex app-server daemon start` antes de abrir o CLI.
-- Não há reinício automático como fallback para versões incompatíveis: a operação falha e mantém/restaura o cache anterior. Este protótipo não usa sinais ou injeção de teclado para reiniciar seu terminal.
-- Detecta falhas descritas como limite de uso pelo hook; não troca por avisos percentuais nem por um 429 genérico. Como `PostModelRequest` fornece texto de erro, mudanças nesse texto podem exigir ajuste.
-- A troca em serviço é experimental. Autenticação de duas assinaturas reais e consumo de cota real ainda não foram testados. O teste usa o Codex real, duas identidades fictícias e um servidor de inferência local.
+## Storage and limitations
 
-## Verificação reproduzível
+- Vault: `~/.local/share/codex-accounts/accounts/NAME/auth.json`, or `CODEX_ACCOUNTS_HOME`. Credentials use `0600` files inside `0700` directories.
+- The backend keeps the connection that handles external token refresh requests. It uses a separate official App Server to refresh saved account credentials and stores the updated refresh token.
+- The panel listens only on `127.0.0.1`, with a random address per run, origin checks, and CSRF-protected forms. IPC uses a Unix socket in a private temporary directory.
+- The backend runs in the background. `bun run stop` stops it; `bun run panel` starts it again. Stopping it while external authentication is active interrupts token refresh handling. After restarting the backend, select the account again in the panel to restore that handling. Restarting the daemon or CLI returns managed authentication to Codex.
+- The connection requires the shared Codex daemon. `--no-daemon`, `--strict-config`, certain `-c` options, and remote sessions may select another server and are not supported by this prototype. If necessary, run `codex app-server daemon start` before opening the CLI.
+- There is no automatic restart fallback for incompatible versions: the operation fails and keeps or restores the previous cache. The prototype does not use signals or keyboard injection to restart your terminal.
+- Hooks detect errors described as usage limits, not percentage warnings or generic HTTP 429 responses. Because `PostModelRequest` supplies error text, changes to that text may require an update.
+- Live account switching is experimental. Authentication with two real subscriptions and real quota consumption have not been tested. Tests use the real Codex binary, two fake identities, and a local inference server.
+
+## Reproducible verification
 
 ```bash
 bun run test:all
 ```
 
-Um único comando executa sete etapas: tipos, testes unitários, build, autenticação, CLI com troca manual, autoswitch sem continuação e autoswitch com continuação. A suíte para na primeira falha e roda também no GitHub Actions em pushes para `main` e pull requests. Para o ciclo rápido, use `bun test`. Os scripts individuais ficam disponíveis para diagnóstico.
+One command runs seven stages: type checking, unit tests, build, authentication, the CLI with manual switching, autoswitch without continuation, and autoswitch with continuation. The suite stops on the first failure and also runs in GitHub Actions on pushes to `main` and pull requests. Use `bun test` for a quick feedback loop. Individual scripts remain available for troubleshooting.
 
-Os casos de integração abrem sockets e pseudoterminal, instalam o plugin em um `CODEX_HOME` temporário e encerram somente os próprios processos. Não autenticam contas reais nem chamam modelos externos. Precisam de permissão para sockets locais. `KEEP_CASE=1` preserva os artefatos temporários para inspeção.
+Integration scenarios open sockets and a pseudoterminal, install the plugin in a temporary `CODEX_HOME`, and stop only their own processes. They do not authenticate real accounts or call external models. They require permission to open local sockets. `KEEP_CASE=1` preserves temporary artifacts when running an individual scenario for inspection.
 
-O teste nativo verifica abertura pelo binário oficial sem `--remote`, falha de cota, confirmação, troca na mesma janela e conversa, contexto preservado e ausência do switcher no conteúdo enviado ao modelo. O diagnóstico separado demonstra por que trocar somente o `auth.json` não atualiza a autenticação em memória.
+The native CLI scenario verifies launch through the official binary without `--remote`, quota failure, confirmation, switching in the same window and conversation, preserved context, and the absence of account manager instructions in model input. A separate diagnostic demonstrates why replacing only `auth.json` does not update authentication held in memory.
 
-Fontes: [hooks](https://learn.chatgpt.com/docs/hooks), [App Server](https://developers.openai.com/codex/app-server/), [plugins](https://developers.openai.com/plugins/build/plugins). Referência comparada: [SrDarf/claude-accounts](https://github.com/SrDarf/claude-accounts). Os mecanismos de recarga de credenciais são diferentes entre os produtos.
+Sources: [Hooks](https://learn.chatgpt.com/docs/hooks), [App Server](https://developers.openai.com/codex/app-server/), and [Plugins](https://developers.openai.com/plugins/build/plugins). Comparison reference: [SrDarf/claude-accounts](https://github.com/SrDarf/claude-accounts). The products use different credential reload mechanisms.
 
-## Contribuição e segurança
+## Contributing and security
 
-Consulte [CONTRIBUTING.md](CONTRIBUTING.md) para desenvolvimento e [SECURITY.md](SECURITY.md) para relatar vulnerabilidades em privado. Licença [MIT](LICENSE). Este projeto é independente e não é um produto oficial da OpenAI.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development and [SECURITY.md](SECURITY.md) for private vulnerability reports. Licensed under [MIT](LICENSE). This is an independent project, not an official OpenAI product.

@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Relatar vulnerabilidade em privado
+  - name: Report a vulnerability privately
     url: https://github.com/eduardoaugustolb/codex-accounts/security/advisories/new
-    about: Consulte SECURITY.md antes de enviar informações sensíveis.
+    about: Read SECURITY.md before submitting sensitive information.

@@ -1,6 +1,6 @@
 {
   "name": "codex-accounts",
   "version": "0.2.0",
-  "description": "Gerencia contas ChatGPT e oferece troca de autenticação no Codex CLI oficial.",
+  "description": "Manages ChatGPT accounts with automatic account switching and conversation continuation in the official Codex CLI.",
   "hooks": "./hooks/hooks.json"
 }

@@ -1,22 +1,22 @@
-# Política de segurança
+# Security policy
 
-## Versões suportadas
+## Supported versions
 
-Correções de segurança são aplicadas à versão mais recente da branch `main`. O projeto é experimental; valide a compatibilidade com a versão do Codex antes de atualizar.
+Security fixes are applied to the latest version on the `main` branch. This project is experimental; verify compatibility with your Codex version before updating.
 
-## Relatar uma vulnerabilidade
+## Reporting a vulnerability
 
-Use [Report a vulnerability](https://github.com/eduardoaugustolb/codex-accounts/security/advisories/new) para enviar um relato privado. Não publique vulnerabilidades de autenticação ou credenciais em issues públicas. Se o formulário estiver indisponível, solicite um canal privado em uma issue sem incluir detalhes técnicos exploráveis.
+Use [Report a vulnerability](https://github.com/eduardoaugustolb/codex-accounts/security/advisories/new) to submit a private report. Do not disclose authentication or credential vulnerabilities in public issues. If the form is unavailable, request a private channel in an issue without including exploitable technical details.
 
-Inclua versão do plugin, Bun e Codex, sistema operacional, passos reproduzíveis com dados fictícios, impacto e eventual correção sugerida. Remova tokens, cookies, emails, conteúdo de conversas, caminhos sensíveis e URLs privadas do painel. Não envie arquivos `auth.json`.
+Include the plugin, Bun, and Codex versions, operating system, reproducible steps using fake data, impact, and any suggested fix. Remove tokens, cookies, email addresses, conversation content, sensitive paths, and private panel URLs. Do not submit `auth.json` files.
 
-O projeto é mantido voluntariamente e não promete prazo de resposta ou recompensa.
+This project is maintained by volunteers and does not promise response times or rewards.
 
-## Modelo de segurança
+## Security model
 
-- Credenciais são armazenadas localmente em arquivos `0600` e diretórios `0700`. Não há criptografia adicional em repouso: proteja a conta do sistema e seus backups.
-- O painel HTTP fica em loopback, com URL aleatória por execução, verificação de origem e CSRF nos formulários. A URL contém um segredo de acesso; não a compartilhe.
-- O IPC usa socket Unix em diretório privado. Um processo com os mesmos privilégios do usuário pode acessar suas credenciais e a sessão.
-- A troca de conta afeta todas as conversas conectadas ao daemon. A continuação automática é opcional e inicia uma requisição de modelo na nova conta.
-- O plugin usa o login oficial e uma RPC experimental. Não coleta credenciais em um serviço próprio e não elimina os limites ou políticas das contas.
-- Testes usam identidades fictícias e serviços locais. Nenhum teste deve exigir contas ou tokens reais.
+- Credentials are stored locally in `0600` files and `0700` directories. There is no additional encryption at rest: protect your operating system account and backups.
+- The HTTP panel binds to loopback, with a random URL per run, origin checks, and CSRF-protected forms. The URL contains an access secret; do not share it.
+- IPC uses a Unix socket in a private directory. A process with the same user privileges can access your credentials and session.
+- Account switching affects all conversations connected to the daemon. Automatic continuation is optional and starts a model request using the new account.
+- The plugin uses the official login flow and an experimental RPC. It does not collect credentials in its own remote service or remove account limits or policies.
+- Tests use fake identities and local services. No test should require real accounts or tokens.

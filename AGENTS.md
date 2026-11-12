@@ -1,50 +1,52 @@
-# Instruções para agentes
+# Agent instructions
 
 ## Runtime
 
-Use sempre **Bun** como runtime e gerenciador de pacotes: `bun install`, `bun run <script>`, `bun <arquivo>` e `bunx --bun <pacote>`. Não use npm, npx ou Node para executar o projeto. Não crie `package-lock.json`; mantenha `bun.lock` atualizado quando mudar dependências.
+Always use **Bun** as the runtime and package manager: `bun install`, `bun run <script>`, `bun <file>`, and `bunx --bun <package>`. Do not use npm, npx, or Node to run this project. Do not create `package-lock.json`; update `bun.lock` when dependencies change.
 
-## Mapa do projeto
+## Project map
 
-- `src/native-backend.ts`: painel HTTP local, IPC Unix, monitor de limites e troca de conta.
-- `src/auto-continue.ts`: identificação de turnos interrompidos por cota e continuação na mesma conversa.
-- `src/native-cli.ts`: comandos, instalação e ciclo de vida do backend.
-- `src/native-hook.ts`: encaminhamento dos quatro eventos de hook.
-- `src/rpc.ts`: comunicação com App Server oficial e helpers isolados.
-- `src/store.ts`: vault, permissões, locks e persistência de credenciais.
-- `src/account-panel.ts`, `src/panel-live.ts`, `src/panel-navigation.ts`: interface local.
-- `test/`: testes unitários com `bun:test`.
-- `tools/test-suite.ts`: suíte completa e sequencial.
-- `tools/*-case.ts`: integrações isoladas com o binário oficial e serviços fictícios.
-- `marketplace/`: manifesto, hooks e executáveis compilados distribuídos pelo plugin.
+- `src/native-backend.ts`: local HTTP panel, Unix IPC, quota monitoring, and account switching.
+- `src/auto-continue.ts`: detection of quota-interrupted turns and continuation in the same conversation.
+- `src/native-cli.ts`: commands, installation, and backend lifecycle.
+- `src/native-hook.ts`: forwarding of the four hook events.
+- `src/rpc.ts`: communication with the official App Server and isolated helpers.
+- `src/store.ts`: vault, permissions, locks, and credential persistence.
+- `src/account-panel.ts`, `src/panel-live.ts`, `src/panel-navigation.ts`: local interface.
+- `test/`: unit tests using `bun:test`.
+- `tools/test-suite.ts`: complete sequential test suite.
+- `tools/*-case.ts`: isolated integrations with the official binary and fake services.
+- `marketplace/`: manifest, hooks, and compiled executables distributed with the plugin.
 
-## Desenvolvimento e validação
+## Development and validation
 
 ```bash
 bun install --frozen-lockfile
 bun run test:all
 ```
 
-A suíte completa verifica tipos, testes unitários, build, autenticação, troca manual e autoswitch com e sem continuação. Execute-a antes de publicar mudanças em autenticação, hooks, RPC ou ciclo de vida. Para alterações pontuais, use inicialmente `bun test` e `bun run check`; antes de publicar, cumpra a validação compatível com o escopo. Não esconda testes falhos e não marque integrações como aprovadas sem executá-las.
+The complete suite checks types, unit tests, build, authentication, manual switching, and autoswitch with and without continuation. Run it before publishing changes to authentication, hooks, RPC, or lifecycle behavior. For small changes, start with `bun test` and `bun run check`; before publishing, complete validation appropriate to the scope. Do not hide failing tests or report integrations as passing without running them.
 
-Requisitos validados: Linux, Bun 1.4.4 e Codex CLI 0.167.2. Integrações precisam de sockets locais, pseudoterminal e espaço para o daemon temporário. Use `CODEX_ACCOUNTS_CODEX` para selecionar um binário. Se definir `TMPDIR`, escolha um caminho curto e com espaço suficiente. Não execute casos individualmente por rotina: prefira a suíte. Use casos isolados apenas para investigar falhas.
+Validated requirements: Linux, Bun 1.4.4, and Codex CLI 0.167.2. Integrations require local sockets, a pseudoterminal, and space for a temporary daemon. Use `CODEX_ACCOUNTS_CODEX` to select a binary. If setting `TMPDIR`, choose a short path with enough space. Prefer the suite for routine validation; run individual scenarios only to investigate failures.
 
-Ao alterar `src/`, regenere `marketplace/plugin/bin` com `bun run build` e inclua os artefatos atualizados. Não edite os bundles manualmente. Atualize README e documentação de validação quando mudar comportamento ou preferências.
+When changing `src/`, regenerate `marketplace/plugin/bin` with `bun run build` and include updated artifacts. Do not edit bundles manually. Update the README and validation documentation when behavior or preferences change.
 
-## Autenticação e segurança
+## Authentication and security
 
-- Nunca leia ou exponha tokens reais para depuração. Não inclua `auth.json`, cookies, emails pessoais, conversas privadas ou URLs secretas do painel em commits, logs ou issues.
-- Testes devem usar `CODEX_HOME` e vault temporários, identidades fictícias e endpoints locais. Não use uma conta real nem consuma cota externa para validar o plugin.
-- Preserve diretórios `0700`, credenciais `0600`, escrita atômica e locks de mutações. Não enfraqueça validações de identidade, origem, CSRF ou paths.
-- A troca afeta todas as conversas conectadas ao daemon. Aguarde todos os turnos ativos terminarem antes de trocar conta ou fazer logout.
-- Preserve o binário oficial, o histórico e o processo do CLI. Não introduza wrappers, aliases, reinício forçado ou injeção de teclado como fallback de produção.
-- O App Server é compartilhado. Não responda aprovações pertencentes ao cliente nativo; atenda somente às requisições de autenticação que o backend possui.
-- A continuação automática é opt-in, aplica-se ao autoswitch e só continua falhas de cota. Ignore threads efêmeras e turnos ativos ou substituídos. Não repita `turn/start` após timeout sem saber se o servidor aceitou o envio.
-- Falha de continuação após login não deve disparar uma segunda troca de conta. Informe o estado no painel.
-- Consulte `SECURITY.md` para relatos de vulnerabilidade.
+- Never read or expose real tokens for debugging. Do not include `auth.json`, cookies, personal email addresses, private conversations, or secret panel URLs in commits, logs, or issues.
+- Tests must use temporary `CODEX_HOME` and vault directories, fake identities, and local endpoints. Do not use real accounts or consume external quotas to validate the plugin.
+- Preserve `0700` directories, `0600` credentials, atomic writes, and mutation locks. Do not weaken identity, origin, CSRF, or path validation.
+- Switching affects all conversations connected to the daemon. Wait for all active turns to finish before switching accounts or signing out.
+- Preserve the official binary, conversation history, and CLI process. Do not introduce wrappers, aliases, forced restarts, or keyboard injection as production fallbacks.
+- App Server is shared. Do not answer approvals owned by the native client; handle only authentication requests owned by the backend.
+- Automatic continuation is opt-in, applies to autoswitch, and continues only quota failures. Ignore ephemeral threads and active or superseded turns. Do not retry `turn/start` after a timeout without knowing whether the server accepted it.
+- A continuation failure after login must not trigger a second account switch. Report the state in the panel.
+- See `SECURITY.md` for vulnerability reporting.
 
-## Documentação externa e Git
+## Documentation and Git
 
-Para dúvidas sobre bibliotecas, SDKs ou serviços, consulte documentação atual com Context7: primeiro `bunx --bun ctx7@latest library <nome> "<pergunta>"`, depois `bunx --bun ctx7@latest docs /org/projeto "<pergunta>"`. Nunca inclua segredos nas consultas.
+Keep Markdown documentation and repository metadata in US English (`en-US`).
 
-Faça commits com mensagens claras, preferencialmente Conventional Commits. Não publique configurações pessoais, arquivos `.env`, `node_modules`, pastas temporárias ou artefatos de testes. Preserve mudanças existentes de outros colaboradores. Não faça force-push nem remova histórico sem autorização explícita.
+For questions about libraries, SDKs, or services, consult current documentation through Context7: first `bunx --bun ctx7@latest library <name> "<question>"`, then `bunx --bun ctx7@latest docs /org/project "<question>"`. Never include secrets in queries.
+
+Write clear commit messages, preferably using Conventional Commits. Do not publish personal configuration, `.env` files, `node_modules`, temporary directories, or test artifacts. Preserve other contributors' existing changes. Do not force-push or remove history without explicit authorization.

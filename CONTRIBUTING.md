@@ -1,16 +1,16 @@
-# Contribuindo
+# Contributing
 
-Use Bun como runtime e gerenciador de pacotes. O ambiente validado usa Linux, Bun 1.4.4 e Codex CLI 0.167.2.
+Use Bun as the runtime and package manager. The validated environment uses Linux, Bun 1.4.4, and Codex CLI 0.167.2.
 
 ```bash
 bun install --frozen-lockfile
 bun run test:all
 ```
 
-A suíte executa checagem de tipos, testes unitários, build e integrações com o CLI oficial, incluindo troca manual e autoswitch com a continuação ativada e desativada. Precisa do binário `codex` no PATH, sockets locais, pseudoterminal e espaço para instalações temporárias do daemon. `CODEX_ACCOUNTS_CODEX` permite selecionar outro binário. `TMPDIR` permite selecionar um diretório temporário com espaço disponível; mantenha o caminho curto por causa dos sockets Unix.
+The suite runs type checking, unit tests, build, and integrations with the official CLI, including manual switching and autoswitch with continuation enabled and disabled. It requires the `codex` binary on `PATH`, local sockets, a pseudoterminal, and space for temporary daemon installations. `CODEX_ACCOUNTS_CODEX` selects another binary. `TMPDIR` selects a temporary directory with available space; keep the path short because of Unix socket limits.
 
-Os cenários isolam `CODEX_HOME`, usam contas fictícias e encerram seus processos ao terminar. A suíte para na primeira etapa que falhar. Use `bun test` para o ciclo rápido de testes unitários. Os scripts individuais continuam disponíveis para diagnosticar uma etapa.
+Scenarios isolate `CODEX_HOME`, use fake accounts, and stop their processes when finished. The suite stops at the first failed stage. Use `bun test` for a quick unit test feedback loop. Individual scripts remain available for troubleshooting a stage.
 
-Abra uma issue com o comportamento esperado e passos reproduzíveis antes de mudanças grandes. Em pull requests, explique problema, alteração e validação. Mudanças no protocolo devem incluir um teste reproduzível e a versão do CLI utilizada. Atualize a documentação quando mudar uma preferência ou comportamento.
+Open an issue describing the expected behavior and reproduction steps before making large changes. In pull requests, explain the problem, change, and validation. Protocol changes should include a reproducible test and the CLI version used. Update documentation when changing preferences or behavior. Keep Markdown documentation and repository metadata in US English (`en-US`).
 
-Não inclua credenciais, diretórios pessoais de configuração ou artefatos de teste. Siga [SECURITY.md](SECURITY.md) para vulnerabilidades.
+Do not include credentials, personal configuration directories, or test artifacts. Follow [SECURITY.md](SECURITY.md) for vulnerabilities.

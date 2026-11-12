@@ -1,10 +1,10 @@
-## Problema e alteração
+## Problem and change
 
-Descreva o problema e o comportamento resultante.
+Describe the problem and the resulting behavior.
 
-## Validação
+## Validation
 
 - [ ] `bun run test:all`
-- [ ] Documentação atualizada quando aplicável
+- [ ] Documentation updated where applicable
 
-Versão do Codex usada:
+Codex version used:
