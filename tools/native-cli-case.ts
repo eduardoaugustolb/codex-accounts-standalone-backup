@@ -14,6 +14,9 @@ const store = new Store(join(home, "vault"));
 const ipcDir = join(tmpdir(), `codex-accounts-${process.getuid?.() ?? "user"}-${createHash("sha256").update(home).digest("hex").slice(0,12)}`);
 const env: Record<string,string | undefined> = { ...process.env, CODEX_HOME: home, CODEX_SQLITE_HOME: home, CODEX_ACCOUNTS_HOME: store.root, CODEX_ACCOUNTS_NO_BROWSER: "1",
   OPENAI_API_KEY: "", CODEX_ACCESS_TOKEN: "", HTTP_PROXY: "http://127.0.0.1:1", HTTPS_PROXY: "http://127.0.0.1:1", ALL_PROXY: "http://127.0.0.1:1", NO_PROXY: "127.0.0.1,localhost", TERM: "xterm-256color" };
+const resetCase = process.env.RESET_CASE;
+let resetAvailable = false;
+let fiveHourAvailable = false;
 const autoCase = process.env.AUTO_SWITCH_CASE === "1";
 const continueCase = process.env.AUTO_CONTINUE_CASE === "1";
 const seen: { account: string | null; input: any }[] = [];
@@ -21,10 +24,10 @@ let refreshes = 0;
 const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
   const path = new URL(req.url).pathname;
   if (path.endsWith("/usage")) {
-    const used = req.headers.get("chatgpt-account-id") === "account-B" ? 60 : 100;
+    const used = resetCase ? (resetAvailable && (resetCase !== "weekly" || fiveHourAvailable) ? 60 : 100) : req.headers.get("chatgpt-account-id") === "account-B" ? 60 : 100;
     return Response.json({ plan_type: "plus", rate_limit: { allowed: used < 100, limit_reached: used === 100,
       primary_window: { used_percent: used, limit_window_seconds: 18000, reset_after_seconds: 3600, reset_at: Math.floor(Date.now()/1000)+3600 },
-      secondary_window: { used_percent: 10, limit_window_seconds: 604800, reset_after_seconds: 86400, reset_at: Math.floor(Date.now()/1000)+86400 } } });
+      secondary_window: { used_percent: resetCase === "weekly" && !resetAvailable ? 100 : 10, limit_window_seconds: 604800, reset_after_seconds: 86400, reset_at: Math.floor(Date.now()/1000)+86400 } } });
   }
   if (path.endsWith("/oauth/token")) {
     refreshes++;
@@ -35,10 +38,10 @@ const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(req) {
   if (path.endsWith("/responses")) {
     const account = req.headers.get("chatgpt-account-id");
     seen.push({ account, input: await req.json() });
-    if (account === "account-A") return Response.json({ error: { type: "usage_limit_reached", plan_type: "plus", message: "You've hit your usage limit", resets_at: Math.floor(Date.now()/1000)+3600 } }, { status: 429 });
+    if (account === "account-A" && !(resetCase && resetAvailable && (resetCase !== "weekly" || fiveHourAvailable))) return Response.json({ error: { type: "usage_limit_reached", plan_type: "plus", message: "You've hit your usage limit", resets_at: Math.floor(Date.now()/1000)+3600 } }, { status: 429 });
     const token = req.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
     const generation = JSON.parse(Buffer.from(token.split(".")[1],"base64url").toString()).generation;
-    if (generation === 0) return Response.json({ error: { message: "expired fake access token", type: "invalid_token" } }, { status: 401 });
+    if (generation === 0 && !resetCase) return Response.json({ error: { message: "expired fake access token", type: "invalid_token" } }, { status: 401 });
     const items = [{ type: "response.created", response: { id: "resp_B" } },
       { type: "response.output_item.done", item: { type: "message", role: "assistant", id: "msg_B", content: [{ type: "output_text", text: "ACCOUNT_B_CONTEXT_OK" }] } },
       { type: "response.completed", response: { id: "resp_B", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } }];
@@ -62,6 +65,7 @@ async function waitFor(check: () => boolean | Promise<boolean>, label: string, t
 }
 try {
   await mkdir(cwd); await store.init();
+  if (resetCase) await Bun.write(join(store.root,"settings.json"), JSON.stringify({resumeAfterReset:true}));
   if (autoCase) await Bun.write(join(store.root,"settings.json"), JSON.stringify({autoSwitch:true, autoContinue:continueCase}));
   await store.saveAuth(home, JSON.stringify(fakeAuth("account-A")));
   await store.saveAuth(store.account("one"), JSON.stringify(fakeAuth("account-A")));
@@ -106,7 +110,35 @@ trust_level = "trusted"
     } } });
   const tuiPid = terminal.pid;
   await waitFor(() => seen.length > 0, "first model request");
-  if (autoCase) {
+  if (resetCase) {
+    await waitFor(async () => {
+      const loaded = await observer!.call("thread/loaded/list");
+      if (!loaded.data[0]) return false;
+      const turns = await observer!.call("thread/turns/list", {threadId:loaded.data[0],limit:1,sortDirection:"desc"});
+      return turns.data[0]?.status === "failed";
+    }, "quota-failed turn");
+    const count = seen.length;
+    resetAvailable = true;
+    if (resetCase === "weekly") {
+      // Weekly capacity alone cannot resume while the 5h window remains exhausted.
+      await Bun.sleep(32000);
+      if (seen.length !== count) throw new Error("Resumed without 5h capacity");
+      fiveHourAvailable = true;
+    }
+    // resetsAt deliberately stays in the future: this models an early token reset.
+    await waitFor(() => seen.length > count, "reset continuation", 45000);
+    await waitFor(() => output.includes("ACCOUNT_B_CONTEXT_OK"), "reset reply", 20000);
+    if (seen.slice(count).some(r => r.account !== "account-A")) throw new Error("Reset switched accounts");
+    if (!JSON.stringify(seen[count]!.input).includes("NATIVE_CONTEXT_42")) throw new Error("Reset lost conversation history");
+    await Bun.sleep(1000);
+    const loaded = await observer!.call("thread/loaded/list");
+    const resumed = await observer!.call("thread/turns/list", {threadId:loaded.data[0],limit:20,sortDirection:"desc"});
+    if (resumed.data.length !== 2) throw new Error(`Expected failed + resumed turns, got ${resumed.data.length}`);
+    const claims = await Bun.file(join(store.root, "reset-continuation-claims.json")).json();
+    if (claims.length !== 1) throw new Error("Expected exactly one durable continuation claim");
+    if (terminal.pid !== tuiPid || terminal.exitCode !== null) throw new Error("Reset restarted CLI");
+    console.log(`Quota reset (${resetCase}), same account/process/context and one continuation: OK`);
+  } else   if (autoCase) {
     await waitFor(async () => {
       try { return (await (await fetch("http://localhost/state", {unix:join(ipcDir,"backend.sock")})).json() as any).active === "two"; } catch { return false; }
     }, "automatic switch", 45000);
@@ -200,6 +232,15 @@ trust_level = "trusted"
     if (await p.exited !== 0) throw new Error(`Local CLI ${command}: ${err}`);
     return out.trim();
   }
+  if (!(await localCli("help")).includes("usage [NAME]")) throw new Error("CLI help missing usage");
+  const quotas = JSON.parse(await localCli("usage", "--json"));
+  if (quotas.accounts.length !== 2 || quotas.accounts.find((a: any) => a.name === "two").usage.fiveHour.remaining !== 40) throw new Error("CLI all-account quotas incorrect");
+  const single = JSON.parse(await localCli("usage", "one", "--json"));
+  if (single.accounts.length !== 1 || single.accounts[0].usage.fiveHour.remaining !== 0) throw new Error("CLI single-account quotas incorrect");
+  await localCli("resume-after-reset", "on");
+  if (!(await Bun.file(join(store.root, "settings.json")).json()).resumeAfterReset) throw new Error("Reset preference not persisted");
+  await localCli("resume-after-reset", "off");
+  if (!(await localCli("switch", "two")).includes("Conta alterada para two")) throw new Error("CLI switch failed");
   const removePost = (name: string, token = csrf!) => fetch(endpoint.url+"remove", { method: "POST", headers: { origin: new URL(endpoint.url).origin }, body: new URLSearchParams({ account: name, csrf: token }) });
   if ((await removePost("one", "invalid")).status !== 403) throw new Error("Removal bypassed CSRF");
   if (!(await (await removePost("two")).text()).includes("Esta conta está em uso")) throw new Error("Active account removal was allowed");

@@ -131,7 +131,7 @@ wake();
 
 // src/account-panel.ts
 var escape = (value) => value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-function renderAccountPanel(accounts, token, csrf, message, pending, autoSwitch = false, autoContinue = false) {
+function renderAccountPanel(accounts, token, csrf, message, pending, autoSwitch = false, autoContinue = false, resumeAfterReset = false) {
   const fields = (name) => `<input type="hidden" name="csrf" value="${escape(csrf)}">${name === undefined ? "" : `<input type="hidden" name="account" value="${escape(name)}">`}`;
   const action = (path) => `/${encodeURIComponent(token)}/${path}`;
   const windowHtml = (label, value) => {
@@ -174,7 +174,7 @@ ${message && message !== "Contas do Codex" ? `<div class="notice" role="status">
 ${pending ? `<div class="notice"><strong>Limite de uso atingido</strong><p>Voc\xEA pode trocar de conta para continuar. Depois da troca, volte ao Codex e envie \u201Ccontinue\u201D.</p></div>` : ""}
 <section class="config-view" data-section="accounts" aria-label="Contas"><h1>Suas contas</h1><p class="intro">Escolha qual conta usar no Codex. Sua conversa continua de onde parou.</p><section class="list" aria-labelledby="accounts-title"><div class="list-title"><h2 id="accounts-title">Contas salvas</h2><span class="count">${accounts.length} ${accounts.length === 1 ? "conta" : "contas"}</span></div>
 ${accounts.map((a) => `<article class="account" aria-label="${escape(a.name)}"><div class="account-main"><span class="avatar" aria-hidden="true">${escape((a.email ?? a.name).slice(0, 1).toUpperCase())}${a.picture ? `<img src="${escape(a.picture)}" alt="" referrerpolicy="no-referrer">` : ""}</span><div class="identity"><div class="identity-line"><span class="name">${escape(a.name)}</span><span class="email">${escape(a.email ?? "Email n\xE3o dispon\xEDvel")}</span></div>${a.current ? '<span class="badge">Conta atual</span>' : ""}</div><form class="row-action" method="post" action="${action("switch")}">${fields(a.name)}<button class="${a.current ? "" : "primary"}" aria-label="${escape(`Usar conta ${a.name}`)}" >${a.current ? "Reconectar" : "Usar conta"}</button></form></div>${usageHtml(a)}<details class="photo-picker"><summary>${a.picture ? "Alterar foto" : "Adicionar foto"}</summary><form class="confirmation" method="post" enctype="multipart/form-data" action="${action("photo")}">${fields(a.name)}<label>Foto de ${escape(a.name)}<input type="file" name="photo" accept="image/png,image/jpeg,image/webp" required></label><p>PNG, JPEG ou WebP de at\xE9 2 MB. A foto fica salva neste dispositivo.</p><button>Salvar foto</button></form></details><details class="remove"><summary>Remover conta</summary><form class="confirmation" method="post" action="${action("remove")}">${fields(a.name)}<p>Remover <strong>${escape(a.name)}</strong> deste dispositivo? As credenciais salvas ser\xE3o apagadas. Para usar a conta novamente, cadastre-a de novo.${a.current ? " Fa\xE7a logout ou troque de conta antes de remover." : ""}</p><button class="danger" ${a.current ? "disabled" : ""}>Confirmar remo\xE7\xE3o</button></form></details></article>`).join("") || '<div class="empty"><p>Nenhuma conta salva. Cadastre uma conta pelo terminal para come\xE7ar.</p><code>bun run start add pessoal</code></div>'}
-</section><p class="scope">A troca vale para todas as conversas conectadas. Aguarde os turnos em andamento terminarem antes de trocar de conta.</p></section><section class="config-view" data-section="preferences" aria-label="Prefer\xEAncias"><h1>Prefer\xEAncias</h1><p class="intro">Defina como o gerenciador deve cuidar das suas contas.</p><section class="auto-switch"><form method="post" action="${action("settings") + "#preferences"}">${fields()}<label><input type="checkbox" name="autoSwitch" ${autoSwitch ? "checked" : ""}> Trocar de conta automaticamente</label><p>Quando um limite chegar a 100% de uso, troca para uma conta com saldo nos dois limites, sem abrir o painel. Vale para todas as conversas conectadas.</p><label><input type="checkbox" name="autoContinue" ${autoContinue ? "checked" : ""}> Continuar automaticamente ao trocar de conta</label><p>Ap\xF3s o autoswitch, envia \u201Ccontinue\u201D nas conversas interrompidas por limite, mantendo o hist\xF3rico. Requer a troca autom\xE1tica ativada.</p><button>Salvar prefer\xEAncia</button></form></section><div class="settings-note"><h2>Atualiza\xE7\xE3o do painel</h2><p>Os dados s\xE3o atualizados enquanto esta janela est\xE1 em foco. Ao sair, as consultas pausam. Ao voltar, o painel reconecta e busca dados novos.</p></div><div class="settings-note"><h2>Apar\xEAncia</h2><p>O tema acompanha o modo claro ou escuro do seu sistema.</p></div></section><section class="config-view" data-section="session" aria-label="Sess\xE3o"><h1>Sess\xE3o</h1><p class="intro">Gerencie a conex\xE3o do Codex com suas contas salvas.</p><section class="session" aria-labelledby="session-title"><div class="session-copy"><h2 id="session-title">Sess\xE3o do Codex</h2><p>Saia da sess\xE3o sem apagar suas contas salvas.</p></div><details><summary>Sair do Codex</summary><form class="confirmation" method="post" action="${action("logout") + "#session"}">${fields()}<p>Isso encerra a sess\xE3o em todas as conversas conectadas. Voc\xEA poder\xE1 entrar novamente com uma conta salva.</p><button class="danger">Confirmar logout do Codex</button></form></details></section>
+</section><p class="scope">A troca vale para todas as conversas conectadas. Aguarde os turnos em andamento terminarem antes de trocar de conta.</p></section><section class="config-view" data-section="preferences" aria-label="Prefer\xEAncias"><h1>Prefer\xEAncias</h1><p class="intro">Defina como o gerenciador deve cuidar das suas contas.</p><section class="auto-switch"><form method="post" action="${action("settings") + "#preferences"}">${fields()}<label><input type="checkbox" name="autoSwitch" ${autoSwitch ? "checked" : ""}> Trocar de conta automaticamente</label><p>Quando um limite chegar a 100% de uso, troca para uma conta com saldo nos dois limites, sem abrir o painel. Vale para todas as conversas conectadas.</p><label><input type="checkbox" name="autoContinue" ${autoContinue ? "checked" : ""}> Continuar automaticamente ao trocar de conta</label><p>Ap\xF3s o autoswitch, envia \u201Ccontinue\u201D nas conversas interrompidas por limite, mantendo o hist\xF3rico. Requer a troca autom\xE1tica ativada.</p><label><input type="checkbox" name="resumeAfterReset" ${resumeAfterReset ? "checked" : ""}> Continuar ap\xF3s a renova\xE7\xE3o dos limites</label><p>Verifica a cada 30 segundos, inclusive ap\xF3s reset antecipado por token. Continua falhas por limite quando houver saldo nas duas janelas. Requer o backend ativo; independe da troca autom\xE1tica.</p><button>Salvar prefer\xEAncia</button></form></section><div class="settings-note"><h2>Atualiza\xE7\xE3o do painel</h2><p>Os dados s\xE3o atualizados enquanto esta janela est\xE1 em foco. Ao sair, as consultas pausam. Ao voltar, o painel reconecta e busca dados novos.</p></div><div class="settings-note"><h2>Apar\xEAncia</h2><p>O tema acompanha o modo claro ou escuro do seu sistema.</p></div></section><section class="config-view" data-section="session" aria-label="Sess\xE3o"><h1>Sess\xE3o</h1><p class="intro">Gerencie a conex\xE3o do Codex com suas contas salvas.</p><section class="session" aria-labelledby="session-title"><div class="session-copy"><h2 id="session-title">Sess\xE3o do Codex</h2><p>Saia da sess\xE3o sem apagar suas contas salvas.</p></div><details><summary>Sair do Codex</summary><form class="confirmation" method="post" action="${action("logout") + "#session"}">${fields()}<p>Isso encerra a sess\xE3o em todas as conversas conectadas. Voc\xEA poder\xE1 entrar novamente com uma conta salva.</p><button class="danger">Confirmar logout do Codex</button></form></details></section>
 <p class="scope">Sair afeta todas as conversas conectadas a esta sess\xE3o. O hist\xF3rico e as contas salvas permanecem neste dispositivo.</p></section><footer><span>Nenhuma mensagem \xE9 reenviada automaticamente.</span>${pending ? `<form method="post" action="${action("cancel")}">${fields()}<button>Manter conta atual</button></form>` : `<a data-panel-base href="${action("")}">Atualizar painel</a>`}</footer><a data-panel-base href="${action("")}" hidden>In\xEDcio</a></main></div><script src="${action("live.js")}" defer></script></body></html>`;
 }
 
@@ -214,7 +214,7 @@ function photoType(bytes) {
 }
 
 // src/native-backend.ts
-import { chmod as chmod3, rm as rm2, writeFile as writeFile2 } from "fs/promises";
+import { chmod as chmod3, rename as rename2, rm as rm2, writeFile as writeFile2 } from "fs/promises";
 
 // src/store.ts
 import { mkdir, chmod, readFile, rename, writeFile, readdir, rm, lstat } from "fs/promises";
@@ -488,6 +488,15 @@ async function serveNative() {
   const settings = await Bun.file(settingsPath).json().catch(() => ({}));
   let autoSwitch = settings.autoSwitch === true;
   let autoContinue = settings.autoContinue === true;
+  let resumeAfterReset = settings.resumeAfterReset === true;
+  const claimsPath = join3(store.root, "reset-continuation-claims.json");
+  const resetClaims = new Set(await Bun.file(claimsPath).json().catch(() => []));
+  async function claimResetTurn(key) {
+    resetClaims.add(key);
+    const temp = `${claimsPath}.tmp`;
+    await writeFile2(temp, JSON.stringify([...resetClaims]), { mode: 384 });
+    await rename2(temp, claimsPath);
+  }
   let monitoring = false;
   let monitorTimer;
   let lastExternalRead = 0;
@@ -566,12 +575,39 @@ async function serveNative() {
       await readUsage(name);
       const snapshot = usage.get(name);
       const exhausted = snapshot?.fiveHour?.remaining === 0 || snapshot?.weekly?.remaining === 0;
+      if (resumeAfterReset && !snapshot?.unavailable && snapshot?.fiveHour && snapshot.weekly && snapshot.fiveHour.remaining > 0 && snapshot.weekly.remaining > 0) {
+        const client = await connect();
+        const interrupted = await interruptedTurns(client);
+        for (const turn of interrupted) {
+          if (!resumeAfterReset)
+            break;
+          const key = JSON.stringify([turn.threadId, turn.turnId]);
+          if (resetClaims.has(key))
+            continue;
+          await claimResetTurn(key);
+          try {
+            const count = await continueTurns(client, [turn], () => resumeAfterReset);
+            if (count)
+              lastMessage = "Limites dispon\xEDveis. Continua\xE7\xE3o enviada na mesma conversa.";
+          } catch {
+            lastMessage = "N\xE3o foi poss\xEDvel confirmar a continua\xE7\xE3o ap\xF3s reset. Verifique o Codex; o envio n\xE3o ser\xE1 repetido.";
+          }
+        }
+        pending = undefined;
+        publish();
+        return;
+      }
       if (!exhausted && !pending)
         return;
       if (!autoSwitch) {
         if (!pending) {
           pending = { threadId: "limits", reason: "usageLimitExceeded" };
-          openPanel();
+          if (!resumeAfterReset)
+            openPanel();
+        }
+        if (resumeAfterReset) {
+          lastMessage = "Aguardando saldo nos limites de 5 horas e semanal para continuar.";
+          publish();
         }
         return;
       }
@@ -680,7 +716,7 @@ async function serveNative() {
         if (["account/rateLimits/updated", "account/updated", "turn/completed", "thread/status/changed"].includes(msg.method)) {
           externalDirty = true;
           publish();
-          if (!monitoring && !refreshWork && (autoSwitch || pending))
+          if (!monitoring && !refreshWork && (autoSwitch || resumeAfterReset || pending))
             scheduleMonitor();
         }
       };
@@ -885,7 +921,7 @@ async function serveNative() {
         usage: usage.get(name)
       };
     }));
-    return renderAccountPanel(accounts, token, csrf, lastMessage, Boolean(pending), autoSwitch, autoContinue);
+    return renderAccountPanel(accounts, token, csrf, lastMessage, Boolean(pending), autoSwitch, autoContinue, resumeAfterReset);
   }
   const web = Bun.serve({ hostname: "127.0.0.1", port: 0, maxRequestBodySize: 3 * 1024 * 1024, async fetch(req) {
     const url = new URL(req.url);
@@ -944,14 +980,17 @@ async function serveNative() {
           const unlock = await store.lock();
           try {
             const enabled = form.get("autoSwitch") === "on";
-            await writeFile2(settingsPath, JSON.stringify({ autoSwitch: enabled, autoContinue: form.get("autoContinue") === "on" }), { mode: 384 });
+            const temp = `${settingsPath}.tmp`;
+            await writeFile2(temp, JSON.stringify({ autoSwitch: enabled, autoContinue: form.get("autoContinue") === "on", resumeAfterReset: form.get("resumeAfterReset") === "on" }), { mode: 384 });
+            await rename2(temp, settingsPath);
+            resumeAfterReset = form.get("resumeAfterReset") === "on";
             autoSwitch = enabled;
             autoContinue = form.get("autoContinue") === "on";
           } finally {
             await unlock();
           }
           lastMessage = autoSwitch ? "Troca autom\xE1tica ativada. A troca afeta todas as conversas conectadas." : "Troca autom\xE1tica desativada.";
-          if (autoSwitch)
+          if (autoSwitch || resumeAfterReset)
             scheduleMonitor();
         } else if (url.pathname === `/${token}/switch`)
           await switchAccount(String(form.get("account")));
@@ -996,11 +1035,72 @@ async function serveNative() {
   let ipc;
   try {
     ipc = Bun.serve({ unix: socketPath, async fetch(req) {
-      if (req.method === "GET")
-        return Response.json({ url: panelUrl, active: active ?? null, pending: pending ?? null, switching, autoSwitch, autoContinue });
+      if (req.method === "GET") {
+        const current = await currentName();
+        return Response.json({
+          url: panelUrl,
+          active: active ?? null,
+          pending: pending ?? null,
+          switching,
+          autoSwitch,
+          autoContinue,
+          resumeAfterReset,
+          message: lastMessage,
+          accounts: (await store.names()).map((name) => ({ name, current: name === current, usage: usage.get(name) }))
+        });
+      }
       if (req.method !== "POST")
         return new Response("Method not allowed", { status: 405 });
       const event = await req.json();
+      if (["usage", "switch", "resume-after-reset", "settings"].includes(event.action)) {
+        try {
+          if (event.action === "usage") {
+            const names = event.account === undefined ? await store.names() : [String(event.account)];
+            const saved = await store.names();
+            for (const name of names) {
+              if (!saved.includes(name))
+                throw new Error("Account not registered.");
+              await readUsage(name);
+            }
+            const current = await currentName();
+            return Response.json({ accounts: names.map((name) => ({ name, current: name === current, usage: usage.get(name) })) });
+          }
+          if (event.action === "switch")
+            await switchAccount(String(event.account));
+          else {
+            const next = { autoSwitch, autoContinue, resumeAfterReset };
+            if (event.action === "resume-after-reset") {
+              if (typeof event.enabled !== "boolean")
+                throw new Error("Expected enabled boolean.");
+              next.resumeAfterReset = event.enabled;
+            } else {
+              for (const key of ["autoSwitch", "autoContinue", "resumeAfterReset"]) {
+                if (event[key] === undefined)
+                  continue;
+                if (typeof event[key] !== "boolean")
+                  throw new Error(`Expected ${key} boolean.`);
+                next[key] = event[key];
+              }
+            }
+            const unlock = await store.lock();
+            try {
+              const temp = `${settingsPath}.tmp`;
+              await writeFile2(temp, JSON.stringify(next), { mode: 384 });
+              await rename2(temp, settingsPath);
+              ({ autoSwitch, autoContinue, resumeAfterReset } = next);
+            } finally {
+              await unlock();
+            }
+            lastMessage = event.action === "settings" ? "Preferences saved." : `Quota-reset continuation ${resumeAfterReset ? "enabled" : "disabled"}.`;
+            if (autoSwitch || resumeAfterReset)
+              scheduleMonitor();
+          }
+          publish();
+          return Response.json({ message: lastMessage });
+        } catch (e) {
+          return Response.json({ error: e instanceof Error ? e.message : "Operation failed." }, { status: 409 });
+        }
+      }
       if (event.action === "remove") {
         try {
           await removeAccount(String(event.account));
@@ -1029,10 +1129,10 @@ async function serveNative() {
         if (event.hook_event_name === "PostModelRequest" && event.status === "failed" && /usage.?limit|usage_limit_reached|quota.{0,30}exceed/i.test(event.error ?? "")) {
           const alreadyPending = Boolean(pending);
           pending = { threadId: event.session_id, reason: "usageLimitExceeded" };
-          if (!autoSwitch && !alreadyPending)
+          if (!autoSwitch && !resumeAfterReset && !alreadyPending)
             openPanel();
         }
-        if (autoSwitch || event.hook_event_name === "SessionStart")
+        if (autoSwitch || resumeAfterReset || event.hook_event_name === "SessionStart")
           scheduleMonitor();
         connect().catch(() => {});
       }
@@ -1044,6 +1144,12 @@ async function serveNative() {
   }
   await chmod3(socketPath, 384);
   await writeFile2(endpointPath, JSON.stringify({ url: panelUrl, pid: process.pid }), { mode: 384 });
+  const resetTimer = setInterval(() => {
+    if (resumeAfterReset && !monitoring)
+      scheduleMonitor(0);
+  }, 30000);
+  if (resumeAfterReset)
+    scheduleMonitor();
   const refreshTimer = setInterval(() => {
     if (!active || switching)
       return;
@@ -1085,6 +1191,7 @@ async function serveNative() {
       } catch {}
     }
     listeners.clear();
+    clearInterval(resetTimer);
     clearInterval(refreshTimer);
     ipc.stop(true);
     web.stop(true);

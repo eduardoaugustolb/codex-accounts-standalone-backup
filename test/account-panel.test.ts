@@ -33,3 +33,11 @@ test("automatic continuation is opt-in and reflects the saved preference", () =>
   expect(enabled).toContain('name="autoContinue" checked');
   expect(enabled).toContain('Continuar automaticamente ao trocar de conta');
 });
+
+test("quota reset continuation is an independent opt-in preference", () => {
+  expect(renderAccountPanel([], "token", "csrf", "", false)).toContain('name="resumeAfterReset" >');
+  const enabled = renderAccountPanel([], "token", "csrf", "", false, false, false, true);
+  expect(enabled).toContain('name="resumeAfterReset" checked');
+  expect(enabled).toContain('name="autoSwitch" >');
+  expect(enabled).toContain('name="autoContinue" >');
+});

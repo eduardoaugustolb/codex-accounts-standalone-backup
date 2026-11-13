@@ -2,7 +2,7 @@ import { interruptedTurns, continueTurns } from "./auto-continue";
 import { panelLiveScript } from "./panel-live";
 import { renderAccountPanel } from "./account-panel";
 import { parseUsage, profilePicture, photoType, type AccountUsage } from "./account-details";
-import { chmod, rm, writeFile } from "node:fs/promises";
+import { chmod, rename, rm, writeFile } from "node:fs/promises";
 import { Store } from "./store";
 import { Rpc, UnixRpc } from "./rpc";
 import { join } from "node:path";
@@ -23,6 +23,16 @@ export async function serveNative() {
   const settings = await Bun.file(settingsPath).json().catch(() => ({}));
   let autoSwitch = settings.autoSwitch === true;
   let autoContinue = settings.autoContinue === true;
+  let resumeAfterReset = settings.resumeAfterReset === true;
+  // Keep a durable claim before submission: a timeout/restart must not duplicate a turn.
+  const claimsPath = join(store.root, "reset-continuation-claims.json");
+  const resetClaims = new Set<string>(await Bun.file(claimsPath).json().catch(() => []));
+  async function claimResetTurn(key: string) {
+    resetClaims.add(key);
+    const temp = `${claimsPath}.tmp`;
+    await writeFile(temp, JSON.stringify([...resetClaims]), { mode: 0o600 });
+    await rename(temp, claimsPath);
+  }
   let monitoring = false;
   let monitorTimer: ReturnType<typeof setTimeout> | undefined;
   let lastExternalRead = 0;
@@ -72,9 +82,29 @@ export async function serveNative() {
       await readUsage(name);
       const snapshot = usage.get(name);
       const exhausted = snapshot?.fiveHour?.remaining === 0 || snapshot?.weekly?.remaining === 0;
+      if (resumeAfterReset && !snapshot?.unavailable && snapshot?.fiveHour && snapshot.weekly && snapshot.fiveHour.remaining > 0 && snapshot.weekly.remaining > 0) {
+        const client = await connect();
+        const interrupted = await interruptedTurns(client);
+        for (const turn of interrupted) {
+          if (!resumeAfterReset) break;
+          const key = JSON.stringify([turn.threadId, turn.turnId]);
+          if (resetClaims.has(key)) continue;
+          await claimResetTurn(key);
+          try {
+            const count = await continueTurns(client, [turn], () => resumeAfterReset);
+            if (count) lastMessage = "Limites disponíveis. Continuação enviada na mesma conversa.";
+          } catch {
+            lastMessage = "Não foi possível confirmar a continuação após reset. Verifique o Codex; o envio não será repetido.";
+          }
+        }
+        pending = undefined;
+        publish();
+        return;
+      }
       if (!exhausted && !pending) return;
       if (!autoSwitch) {
-        if (!pending) { pending = { threadId: "limits", reason: "usageLimitExceeded" }; openPanel(); }
+        if (!pending) { pending = { threadId: "limits", reason: "usageLimitExceeded" }; if (!resumeAfterReset) openPanel(); }
+        if (resumeAfterReset) { lastMessage = "Aguardando saldo nos limites de 5 horas e semanal para continuar."; publish(); }
         return;
       }
       // Hooks can run before the failing turn has become idle. Never interrupt it.
@@ -153,7 +183,7 @@ export async function serveNative() {
         if (["account/rateLimits/updated", "account/updated", "turn/completed", "thread/status/changed"].includes(msg.method)) {
           externalDirty = true;
           publish();
-          if (!monitoring && !refreshWork && (autoSwitch || pending)) scheduleMonitor();
+          if (!monitoring && !refreshWork && (autoSwitch || resumeAfterReset || pending)) scheduleMonitor();
         }
       };
       next.onRequest = async msg => {
@@ -287,7 +317,7 @@ export async function serveNative() {
       return { name, email, current: name === active || identity(raw).accountId === currentId,
         picture: await photo.exists() ? `/${token}/photo?account=${encodeURIComponent(name)}` : profilePicture(raw), usage: usage.get(name) };
     }));
-    return renderAccountPanel(accounts, token, csrf, lastMessage, Boolean(pending), autoSwitch, autoContinue);
+    return renderAccountPanel(accounts, token, csrf, lastMessage, Boolean(pending), autoSwitch, autoContinue, resumeAfterReset);
   }
   const web = Bun.serve({ hostname: "127.0.0.1", port: 0, maxRequestBodySize: 3 * 1024 * 1024, async fetch(req) {
     const url = new URL(req.url);
@@ -328,12 +358,15 @@ export async function serveNative() {
           const unlock = await store.lock();
           try {
             const enabled = form.get("autoSwitch") === "on";
-            await writeFile(settingsPath, JSON.stringify({ autoSwitch: enabled, autoContinue: form.get("autoContinue") === "on" }), { mode: 0o600 });
+            const temp = `${settingsPath}.tmp`;
+            await writeFile(temp, JSON.stringify({ autoSwitch: enabled, autoContinue: form.get("autoContinue") === "on", resumeAfterReset: form.get("resumeAfterReset") === "on" }), { mode: 0o600 });
+            await rename(temp, settingsPath);
+            resumeAfterReset = form.get("resumeAfterReset") === "on";
             autoSwitch = enabled;
             autoContinue = form.get("autoContinue") === "on";
           } finally { await unlock(); }
           lastMessage = autoSwitch ? "Troca automática ativada. A troca afeta todas as conversas conectadas." : "Troca automática desativada.";
-          if (autoSwitch) scheduleMonitor();
+          if (autoSwitch || resumeAfterReset) scheduleMonitor();
         }
         else if (url.pathname === `/${token}/switch`) await switchAccount(String(form.get("account")));
         else if (url.pathname === `/${token}/logout`) await logout();
@@ -364,9 +397,52 @@ export async function serveNative() {
   let ipc: ReturnType<typeof Bun.serve>;
   try {
     ipc = Bun.serve({ unix: socketPath, async fetch(req) {
-      if (req.method === "GET") return Response.json({ url: panelUrl, active: active ?? null, pending: pending ?? null, switching, autoSwitch, autoContinue });
+      if (req.method === "GET") {
+        const current = await currentName();
+        return Response.json({ url: panelUrl, active: active ?? null, pending: pending ?? null, switching, autoSwitch, autoContinue, resumeAfterReset, message: lastMessage,
+          accounts: (await store.names()).map(name => ({ name, current: name === current, usage: usage.get(name) })) });
+      }
       if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
       const event = await req.json() as any;
+      if (["usage", "switch", "resume-after-reset", "settings"].includes(event.action)) {
+        try {
+          if (event.action === "usage") {
+            const names = event.account === undefined ? await store.names() : [String(event.account)];
+            const saved = await store.names();
+            for (const name of names) {
+              if (!saved.includes(name)) throw new Error("Account not registered.");
+              await readUsage(name);
+            }
+            const current = await currentName();
+            return Response.json({ accounts: names.map(name => ({ name, current: name === current, usage: usage.get(name) })) });
+          }
+          if (event.action === "switch") await switchAccount(String(event.account));
+          else {
+            const next = { autoSwitch, autoContinue, resumeAfterReset };
+            if (event.action === "resume-after-reset") {
+              if (typeof event.enabled !== "boolean") throw new Error("Expected enabled boolean.");
+              next.resumeAfterReset = event.enabled;
+            } else {
+              for (const key of ["autoSwitch", "autoContinue", "resumeAfterReset"] as const) {
+                if (event[key] === undefined) continue;
+                if (typeof event[key] !== "boolean") throw new Error(`Expected ${key} boolean.`);
+                next[key] = event[key];
+              }
+            }
+            const unlock = await store.lock();
+            try {
+              const temp = `${settingsPath}.tmp`;
+              await writeFile(temp, JSON.stringify(next), { mode: 0o600 });
+              await rename(temp, settingsPath);
+              ({ autoSwitch, autoContinue, resumeAfterReset } = next);
+            } finally { await unlock(); }
+            lastMessage = event.action === "settings" ? "Preferences saved." : `Quota-reset continuation ${resumeAfterReset ? "enabled" : "disabled"}.`;
+            if (autoSwitch || resumeAfterReset) scheduleMonitor();
+          }
+          publish();
+          return Response.json({ message: lastMessage });
+        } catch (e) { return Response.json({ error: e instanceof Error ? e.message : "Operation failed." }, { status: 409 }); }
+      }
       if (event.action === "remove") {
         try { await removeAccount(String(event.account)); return Response.json({ message: lastMessage }); }
         catch (e) { return Response.json({ error: e instanceof Error ? e.message : "Remoção não concluída." }, { status: 409 }); }
@@ -385,10 +461,10 @@ export async function serveNative() {
         if (event.hook_event_name === "PostModelRequest" && event.status === "failed" && /usage.?limit|usage_limit_reached|quota.{0,30}exceed/i.test(event.error ?? "")) {
           const alreadyPending = Boolean(pending);
           pending = { threadId: event.session_id, reason: "usageLimitExceeded" };
-          if (!autoSwitch && !alreadyPending) openPanel();
+          if (!autoSwitch && !resumeAfterReset && !alreadyPending) openPanel();
         }
         // Acknowledge immediately: never keep Codex waiting on network reads.
-        if (autoSwitch || event.hook_event_name === "SessionStart") scheduleMonitor();
+        if (autoSwitch || resumeAfterReset || event.hook_event_name === "SessionStart") scheduleMonitor();
         void connect().catch(() => {});
       }
       return Response.json({});
@@ -396,6 +472,12 @@ export async function serveNative() {
   } catch (e) { web.stop(true); throw e; }
   await chmod(socketPath, 0o600);
   await writeFile(endpointPath, JSON.stringify({ url: panelUrl, pid: process.pid }), { mode: 0o600 });
+  // Backend-owned recurring job; polling also detects resets purchased before resetsAt.
+  // Re-read authoritative quotas instead of assuming a timestamp grants capacity.
+  const resetTimer = setInterval(() => {
+    if (resumeAfterReset && !monitoring) scheduleMonitor(0);
+  }, 30000);
+  if (resumeAfterReset) scheduleMonitor();
   const refreshTimer = setInterval(() => {
     if (!active || switching) return;
     // After a daemon restart its managed auth owns refresh again. Do not run
@@ -421,6 +503,7 @@ export async function serveNative() {
     if (monitorTimer) clearTimeout(monitorTimer);
     for (const listener of listeners) { try { listener.close(); } catch {} }
     listeners.clear();
+    clearInterval(resetTimer);
     clearInterval(refreshTimer); ipc.stop(true); web.stop(true); await rpc?.close();
     await rm(endpointPath, { force: true }); await rm(socketPath, { force: true });
   }

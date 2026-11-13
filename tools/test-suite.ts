@@ -5,17 +5,20 @@ const steps = [
   { name: "TypeScript", args: ["run", "check"] },
   { name: "Testes unitários", args: ["test"] },
   { name: "Build do plugin", args: ["run", "build"] },
+  { name: "Terminal UI with isolated fake client", args: ["tools/tui-case.ts"] },
   { name: "Autenticação e histórico", args: ["tools/auth-hook-case.ts"] },
   { name: "CLI: troca manual, segurança, preferências e ciclo de vida", args: ["tools/native-cli-case.ts"] },
   { name: "CLI: autoswitch sem continuação", args: ["tools/native-cli-case.ts"], env: { AUTO_SWITCH_CASE: "1" } },
   { name: "CLI: autoswitch com continuação", args: ["tools/native-cli-case.ts"], env: { AUTO_SWITCH_CASE: "1", AUTO_CONTINUE_CASE: "1" } },
+  { name: "CLI: early/token quota reset continuation", args: ["tools/native-cli-case.ts"], env: { RESET_CASE: "token" } },
+  { name: "CLI: weekly reset waits for 5h capacity", args: ["tools/native-cli-case.ts"], env: { RESET_CASE: "weekly" } },
 ];
 const started = Date.now();
 for (const [i, step] of steps.entries()) {
   console.log(`\n[${i + 1}/${steps.length}] ${step.name}`);
   const proc = Bun.spawn([process.execPath, ...step.args], {
     cwd: root,
-    env: { ...process.env, AUTO_SWITCH_CASE: "0", AUTO_CONTINUE_CASE: "0", KEEP_CASE: "", ...step.env },
+    env: { ...process.env, AUTO_SWITCH_CASE: "0", AUTO_CONTINUE_CASE: "0", RESET_CASE: "", KEEP_CASE: "", ...step.env },
     stdin: "ignore", stdout: "inherit", stderr: "inherit",
   });
   const exitCode = await proc.exited;

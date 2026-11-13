@@ -77,3 +77,56 @@ Result: **seven stages passed in 27.8 seconds**, using Bun 1.4.4 and Codex CLI 0
 Continuation identifies quota failures in each loaded conversation's latest turn, ignores ephemeral threads, and reads the turn again after switching. If the user has already changed the conversation, submission is skipped. A `turn/start` timeout does not trigger resubmission or another account switch.
 
 The integration test revealed that the daemon also lists internal ephemeral threads, which reject turn history reads. The routine ignores those threads. Temporary projects must stay outside the repository tree to avoid inheriting its `AGENTS.md`; short paths also avoid Unix socket path limits.
+
+## CLI quota commands and quota-reset continuation
+
+Implemented `usage [NAME] [--json]`, `switch NAME`, command help, argument errors,
+and `resume-after-reset on|off`, with Bun script shortcuts. The native CLI case
+checks all-account and single-account quota JSON, live switching, and persistence
+of the independent reset-continuation preference.
+
+The suite now includes two additional official CLI scenarios using only local
+fake services:
+
+- Early/token reset: the published reset timestamp remains in the future, but
+  restored quota causes one continuation in the original account and conversation.
+- Weekly reset: restored weekly capacity does not resume while the 5-hour quota
+  remains exhausted. Restoring both windows causes continuation with the original
+  context and CLI process. The scenario checks the conversation has exactly two
+  turns (the failed turn and its continuation) and one durable submission claim.
+
+The backend uses a 30-second recurring job plus daemon notifications, not a system
+crontab. Enable it explicitly from the panel or CLI. Reset tokens are redeemed
+outside the plugin; tests simulate their resulting quota recovery.
+
+Validation: `bun run test:all` with a short, private on-disk `TMPDIR` passed all nine
+stages in 96.6 seconds. The initial attempt using `/tmp` could not install the
+isolated daemon because that tmpfs had insufficient free space; no tests were
+skipped to work around it. The final unit run passed 16 tests with 118 assertions;
+`bun run check` and the final `bun run build` also passed. Test fixtures use no real
+accounts, and generating conversation titles may make auxiliary inference calls,
+so duplicate detection counts conversation turns rather than raw HTTP requests.
+
+## Terminal interface and expanded documentation
+
+The suite now has ten stages. The additional PTY scenario exercises the terminal
+manager with an isolated fake client: arrow navigation, explicit switch
+confirmation, cancellation, setting toggles, failed removal, canceled login,
+and restoration of raw mode, cursor visibility, and the alternate screen.
+No real vault, account, or inference service is used by that scenario.
+
+Terminal rendering tests also cover remaining-capacity bars, unknown quotas,
+selection wrapping, small-terminal scrolling, and removal of service-supplied
+control characters. The theme uses the terminal defaults, bold headings, dim
+metadata, and reverse-video selection without a fixed accent palette.
+
+Final validation: `bun run test:all` with a short, private on-disk `TMPDIR` passed
+all **ten stages in 95.1 seconds**, including **19 unit tests and 150 assertions**.
+Type checking, regenerated plugin bundles, authentication integrations, manual
+switching, both autoswitch modes, early/token reset, and weekly reset waiting for
+five-hour capacity all passed. `git diff --check` reported no whitespace errors.
+
+User documentation is organized in the [CLI/TUI guide](cli.md),
+[automation guide](automation.md), and [README](../README.md). The upstream MIT
+attribution is retained in `LICENSE`; Git history is preserved when linking the
+Codex adaptation to the upstream fork network.

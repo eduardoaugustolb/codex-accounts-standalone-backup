@@ -20,7 +20,12 @@
     "check": "tsc --noEmit",
     "test:auth-case": "bun tools/auth-hook-case.ts",
     "test:native-case": "bun run build && bun tools/native-cli-case.ts",
-    "test:all": "bun tools/test-suite.ts"
+    "test:all": "bun tools/test-suite.ts",
+    "help": "bun src/native-cli.ts --help",
+    "usage": "bun src/native-cli.ts usage",
+    "switch": "bun src/native-cli.ts switch",
+    "resume-after-reset": "bun src/native-cli.ts resume-after-reset",
+    "tui": "bun src/native-cli.ts tui"
   },
   "devDependencies": {
     "@types/bun": "^1.3.0",

@@ -2,7 +2,16 @@
 
 [![Test suite](https://github.com/eduardoaugustolb/codex-accounts/actions/workflows/ci.yml/badge.svg)](https://github.com/eduardoaugustolb/codex-accounts/actions/workflows/ci.yml) [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-An experimental plugin for switching ChatGPT accounts in the **official Codex CLI**, with local confirmation or optional automatic switching when a quota is exhausted. Start Codex normally with `codex`; the plugin does not replace the binary with a wrapper, alias, or launcher.
+Manage ChatGPT accounts in the **official Codex CLI** through a terminal interface,
+a browser panel, or direct commands. Switch accounts, inspect quota windows, and
+optionally resume conversations after switching or quota recovery.
+
+This is a Codex-focused adaptation of [SrDarf/claude-accounts](https://github.com/SrDarf/claude-accounts),
+with its own Bun implementation and official Codex daemon integration. Start
+Codex normally with `codex`; the plugin does not replace its binary with a wrapper,
+alias, or launcher. Live authentication switching remains experimental.
+
+Quick links: [Installation](#installation) · [Terminal interface](#terminal-interface-and-cli) · [Command reference](docs/cli.md) · [Automation](docs/automation.md) · [Validation](docs/validation-2026-11-12.md).
 
 The plugin provides four hooks (`SessionStart`, `PostModelRequest`, `Stop`, and `Interrupt`). A local backend manages confirmation and authentication through the official daemon's Unix socket. No skill, MCP server, or instructions about the account manager are sent to the model.
 
@@ -70,44 +79,112 @@ bun run start remove secondary
 
 In the panel, expand the account's removal action and confirm it. This deletes that account's local credentials; add the account again to use it later. The active account is protected: sign out or switch to another account before removing it. Other accounts and conversation history are preserved.
 
-## When a quota is exhausted
+## Terminal interface and CLI
 
-1. The hook receives the failed request and notifies the backend without querying the model.
-2. The browser opens a local panel offering an account switch. With automatic switching disabled, you must select an account to confirm the switch.
-3. The backend verifies that all turns connected to the daemon have stopped, preserves the current credentials, and applies the selected account through RPC.
-4. Return to the same terminal and send `continue` whenever you are ready. If automatic continuation (`autoContinue`) is enabled in preferences, autoswitch sends `continue` in the same conversation after switching accounts.
-
-Switching affects every conversation connected to the same App Server. History stays in the original `CODEX_HOME`; subsequent requests use the selected account's identity and policies. The CLI window and conversation do not need to restart in the tested scenario.
-
-To open the panel manually without involving the model:
+Open the interactive account manager:
 
 ```bash
-bun run start panel
+bun run tui
+# With an interactive terminal, this also opens the TUI:
+bun run start
 ```
 
-This command can run in another terminal and starts the backend automatically, even after `stop`. Existing accounts do not need to be added again. `bun run start status` displays the local address or reports that the backend is stopped. There is no `/accounts` slash command: integration uses hooks without skill prompts.
+Select an account with **Up/Down** or **j/k**. The screen shows the active account,
+five-hour and weekly **remaining** capacity, and relative reset times. Press
+**Enter**, then **y**, to switch the shared session. The TUI follows the terminal's
+default foreground and background colors, using bold headings, dim details, and
+reverse-video selection so it fits light and dark Codex terminal themes.
+
+| Key | Action |
+| --- | --- |
+| Up/Down or j/k | Select an account |
+| Enter | Confirm an account switch with y |
+| r | Refresh all account quotas |
+| a | Toggle automatic switching |
+| c | Toggle continuation after autoswitch |
+| w | Toggle continuation after quota recovery |
+| n | Add an account using official device login |
+| s | Capture the current official login under a new name |
+| d | Remove the selected account, after confirmation |
+| l | Sign out of the shared session, after confirmation |
+| q, Esc, Ctrl+C | Exit; Esc cancels an open prompt first |
+
+The backend keeps running when the TUI closes. Login temporarily returns control
+to the terminal; the manager restores its screen afterward. No wrapper or
+keystrokes are sent to the official Codex terminal.
+
+For scripts or direct commands:
+
+```bash
+bun run help
+bun run usage                     # Fresh quotas for every saved account
+bun run usage work                # Fresh quotas for one account
+bun run usage work --json         # Machine-readable quotas
+bun run switch personal           # Switch the shared session
+bun run resume-after-reset on     # Resume quota-failed conversations when capacity returns
+bun run resume-after-reset off
+```
+
+All commands, arguments, output formats, and recovery steps are documented in the
+[CLI and TUI guide](docs/cli.md). Use the local account aliases assigned with
+`add` or `capture`; they are not email addresses.
+
+## Automatic switching and continuation
+
+All three preferences are **off by default** and persisted in the private vault.
+Configure them in the TUI or the browser panel's **Preferências** section.
+
+| Preference | TUI | Behavior |
+| --- | --- | --- |
+| `autoSwitch` | a | Switch to another identity with confirmed capacity in both windows when quota is exhausted. |
+| `autoContinue` | c | After autoswitch, send `continue` to conversations interrupted by quota. Requires `autoSwitch`. |
+| `resumeAfterReset` | w | Resume quota-failed conversations on the current saved account once both quotas have capacity. Independent of autoswitch. |
+
+For reset continuation, the backend checks authoritative quotas every 30 seconds
+and after relevant daemon notifications. This covers five-hour resets, weekly
+resets, and early recovery from a reset token redeemed outside the plugin. A
+weekly reset alone does not resume a conversation while its five-hour quota is
+still exhausted. An advertised reset timestamp is never treated as proof that
+capacity is available.
+
+Only loaded, non-ephemeral conversations whose latest turn failed because of
+quota are eligible. Active or superseded turns are skipped. The original history
+and CLI process stay in place. Uncertain submissions are not retried; reset
+continuation records a durable claim before sending the request.
+
+See [Automatic behavior and recovery](docs/automation.md) for eligibility,
+scheduling, persistence, safety rules, and examples of interacting preferences.
+
+## Browser panel and backend lifecycle
 
 ```bash
 bun run panel     # Start the backend if needed and open the panel
-bun run status
-bun run restart   # Restart only the plugin backend and print its new address
+bun run status    # Show its private local address, or stopped status
+bun run restart   # Restart the plugin backend and generate a new panel address
 bun run stop
-bun run logout    # Sign out of the shared Codex session, keeping saved accounts
+bun run logout    # Sign out, keeping saved accounts
 ```
 
-The commands `bun run start start`, `bun run start restart`, and `bun run start logout` are also available. The panel includes a sign-out confirmation. Signing out and switching accounts require every daemon turn to be stopped. After signing out, select a saved account in the panel to sign in again. Sign-out uses the official [`account/logout`](https://learn.chatgpt.com/docs/app-server#5-logout) RPC.
+With automatic switching and reset continuation disabled, a detected quota failure
+opens the local panel. Choose an account, wait for all connected turns to finish,
+and switch. Return to the same Codex conversation and send `continue` yourself.
+Manual switches never start turns. The TUI offers the same backend operations.
+There is no `/accounts` slash command.
 
-## Automatic switching and live updates
+Switching and logout affect **every conversation connected to the shared daemon**.
+They return an error while a loaded turn is active. The backend's autoswitch loop
+waits and checks again instead of interrupting it.
 
-Enable automatic account switching (`autoSwitch`) in preferences and save. It is disabled by default and stored in the vault's `settings.json`. When the five-hour or weekly quota is exhausted, or a hook reports a quota failure, the backend waits for all turns to stop and checks other accounts in alphabetical order. It switches to the first different identity with confirmed remaining capacity in both windows. Automatic mode does not open the browser. If no eligible account is available, it keeps the session and displays the reason in the panel. Switching affects all connected conversations.
+While the browser is focused, the panel uses SSE and periodic local state checks;
+external quota reads are throttled to 30 seconds without new events. The browser
+pauses its own connections when it loses focus. Hook monitoring, authentication
+refresh, and enabled reset continuation keep running without an open panel.
 
-Automatic continuation (`autoContinue`) is also disabled by default and saved in `settings.json`. When enabled together with autoswitch, it sends `continue` to loaded conversations whose latest turn failed because of a quota, preserving history. The backend checks the turn again after login and skips conversations that have changed or are active. Manual switches and preventive switches without a quota failure do not start turns. If submission cannot be confirmed, the panel reports the issue and the backend does not automatically retry the submission.
-
-`SessionStart` starts the backend without opening the browser. Hooks must be installed, enabled, and trusted in `/hooks`. `PostModelRequest`, `Stop`, and `Interrupt`, together with App Server notifications, signal changes and trigger quota checks. The browser opens through `bun run panel` or, in manual mode, when a hook detects an exhausted quota.
-
-While the browser tab is visible and focused, the panel receives SSE events and checks local state every three seconds. External quotas for all accounts are queried when focus returns, after relevant events, and at most once every 30 seconds without events. Updates reflect the service's available data and are not a guarantee of instant changes from external sources. When the tab loses focus, the browser closes SSE, cancels its request, and stops timers. When focus returns, it reconnects and requests fresh data. An external query already running on the server may still finish. Open confirmations and selected upload files are preserved. Hook monitoring and authentication refresh continue without the panel.
-
-To update an existing installation, run `bun run setup`, review all four hooks in `/hooks`, and start a new conversation. Then use `bun run restart` and `bun run panel` to load the updated backend. Restarting the backend generates a new address; reopen old panel tabs with `bun run panel`.
+To update an installation, run `bun run setup`, review all four hooks in `/hooks`,
+and start a new conversation. Then run `bun run restart` and reopen the panel or
+TUI. Restarting the backend changes the panel's private URL. If the previous
+backend owned external authentication, select the saved account again to restore
+refresh handling.
 
 ## Storage and limitations
 
@@ -126,13 +203,15 @@ To update an existing installation, run `bun run setup`, review all four hooks i
 bun run test:all
 ```
 
-One command runs seven stages: type checking, unit tests, build, authentication, the CLI with manual switching, autoswitch without continuation, and autoswitch with continuation. The suite stops on the first failure and also runs in GitHub Actions on pushes to `main` and pull requests. Use `bun test` for a quick feedback loop. Individual scripts remain available for troubleshooting.
+One command runs ten stages: type checking, unit tests, build, the terminal UI with a fake client, authentication, the CLI with manual switching, autoswitch without continuation, autoswitch with continuation, early/token reset continuation, and weekly reset waiting for 5-hour capacity. The suite stops on the first failure and also runs in GitHub Actions on pushes to `main` and pull requests. Use `bun test` for a quick feedback loop. Individual scripts remain available for troubleshooting.
 
 Integration scenarios open sockets and a pseudoterminal, install the plugin in a temporary `CODEX_HOME`, and stop only their own processes. They do not authenticate real accounts or call external models. They require permission to open local sockets. `KEEP_CASE=1` preserves temporary artifacts when running an individual scenario for inspection.
 
 The native CLI scenario verifies launch through the official binary without `--remote`, quota failure, confirmation, switching in the same window and conversation, preserved context, and the absence of account manager instructions in model input. A separate diagnostic demonstrates why replacing only `auth.json` does not update authentication held in memory.
 
-Sources: [Hooks](https://learn.chatgpt.com/docs/hooks), [App Server](https://developers.openai.com/codex/app-server/), and [Plugins](https://developers.openai.com/plugins/build/plugins). Comparison reference: [SrDarf/claude-accounts](https://github.com/SrDarf/claude-accounts). The products use different credential reload mechanisms.
+Upstream attribution: the account-selector workflow is inspired by [SrDarf/claude-accounts](https://github.com/SrDarf/claude-accounts). This adaptation targets Codex; upstream targets Claude Code. Their credential reload mechanisms and integrations differ. The upstream and adaptation copyrights are retained in [LICENSE](LICENSE).
+
+Sources: [Hooks](https://learn.chatgpt.com/docs/hooks), [App Server](https://developers.openai.com/codex/app-server/), and [Plugins](https://developers.openai.com/plugins/build/plugins).
 
 ## Contributing and security
 
